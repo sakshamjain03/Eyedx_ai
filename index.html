@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RICAI - Medical Assistant</title>
+    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Title -->
+    <header>
+        <h1>RICAI</h1>
+        <button id="camera-btn">Access Camera</button>
+    </header>
+
+    <div class="container">
+        <!-- Dashboard -->
+        <aside class="dashboard">
+            <h2>Dashboard</h2>
+            <img id="captured-image" style="display:none;" />
+            <button id="retake-btn" style="display:none;">Retake</button>
+            <button id="submit-btn" style="display:none;">Submit</button>
+        </aside>
+
+        <!-- Camera Section -->
+        <main class="camera-container">
+            <video id="video" autoplay></video>
+            <canvas id="canvas" style="display:none;"></canvas>
+            <button id="capture-btn" style="display:none;">Capture eye pic</button>
+        </main>
+
+        <!-- Chat Popup -->
+        <div class="chat-container">
+            <button class="toggle-btn" id="toggle-btn">Chat with us</button>
+            <div id="app">
+                <h2>Health Chatbot</h2>
+                <div class="chat-box">
+                    <div v-for="message in messages" :class="['message', message.sender]" :key="message.id">
+                        {{ message.text }}
+                    </div>
+                </div>
+                <input v-model="userInput" @keyup.enter="sendMessage" placeholder="Ask about health issues..." />
+                <button @click="sendMessage">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
