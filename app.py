@@ -1,48 +1,100 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS  # Allows frontend to communicate with backend
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from fastapi import FastAPI, File, UploadFile
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import torch
-import warnings
+import torchvision.transforms as transforms
+from PIL import Image
+import models_vit
+import io
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
-warnings.filterwarnings("ignore")
+app = FastAPI()
 
-app = Flask(__name__)
-CORS(app)  # Enable Cross-Origin Requests
+# Allow frontend requests
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Change to ["http://localhost:5173"] for Vue/React dev
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-MODEL_NAME = "Saksham03/MCBC"
+# Load Image Classification Model
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+checkpoint_path = "checkpoint-best.pth"
+checkpoint = torch.load(checkpoint_path, map_location=device)
 
-try:
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-    model = AutoModelForCausalLM.from_pretrained(
-        MODEL_NAME, torch_dtype=torch.float32
-    )
-    model.to("cpu")  # Move the model to CPU
-except Exception as e:
-    print(f"Error loading model: {e}")
-    exit()
+image_model = models_vit.VisionTransformer(embed_dim=1024, num_heads=16, depth=22, num_classes=5)
+image_model.load_state_dict(checkpoint, strict=False)
+image_model.to(device)
+image_model.eval()
 
-def generate_response(instruction):
+categories = ["anoDR", "bmildDR", "cmoderateDR", "dsevereDR", "eproDR"]
+transform = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+])
+
+@app.post("/predict/")
+async def predict(file: UploadFile = File(...)):
     try:
-        inputs = tokenizer(instruction, return_tensors="pt", padding=True, truncation=True)
-        inputs = {key: value.to(model.device) for key, value in inputs.items()}
+        image = Image.open(io.BytesIO(await file.read())).convert("RGB")
+        image = transform(image).unsqueeze(0).to(device)
 
         with torch.no_grad():
-            output_ids = model.generate(**inputs, max_length=100)
+            output = image_model(image)
+            probabilities = torch.nn.functional.softmax(output, dim=1)
+            confidence, predicted_class = torch.max(probabilities, dim=1)
 
-        response_text = tokenizer.decode(output_ids[0], skip_special_tokens=True)
-        return response_text
+        return JSONResponse(content={
+            "category": categories[predicted_class.item()],
+            "confidence": f"{confidence.item() * 100:.2f}%"
+        })
+
     except Exception as e:
-        return str(e)
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
-@app.route('/generate', methods=['POST'])
-def generate_text():
+model_path = r"C:\My Data\New folder (2)\Eyedx_ai\LLM_model\Saksham-Med-Llama-8b"
+
+# Load tokenizer
+tokenizer = AutoTokenizer.from_pretrained(model_path)
+
+# Load model with 8-bit quantization for memory efficiency
+model = AutoModelForCausalLM.from_pretrained(
+    model_path,
+    torch_dtype=torch.float16,  # Use FP16 for RTX 4060
+    device_map="auto"  # Automatically assigns model to GPU if available
+)
+
+
+@app.post("/generate/")
+async def generate(request: dict):
     try:
-        data = request.get_json()
-        instruction = data['instruction']
-        response_text = generate_response(instruction)
-        return jsonify({'generated_text': response_text})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        user_input = request.get("instruction", "")
+        if not user_input:
+            return JSONResponse(content={"error": "Instruction is required"}, status_code=400)
 
-if __name__ == '__main__':
-    app.run(debug=True)
+        # Generate response using the model
+        def generate_response(prompt, max_length=200):
+            inputs = tokenizer(prompt, return_tensors="pt").to(device)  # device can be "cuda" or "cpu"
+            with torch.no_grad():
+                outputs = model.generate(**inputs, max_length=max_length)
+            return tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+        response_text = generate_response(user_input)
+
+        return JSONResponse(content={"generated_text": response_text})
+
+    except Exception as e:
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "app:app",
+        host="127.0.0.1",
+        port=8000,
+        reload=False,
+        workers=1,
+    )

@@ -1,0 +1,24 @@
+
+torchaudio==2.2.0
+python-multipart
+opencv-python
+pandas
+Pillow
+protobuf
+pycm
+pydicom
+scikit-image
+scikit-learn
+scipy
+tensorboard
+tensorboard-data-server
+tensorboard-plugin-wit
+timm
+tqdm
+fastapi 
+uvicorn 
+streamlit  
+torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+transformers
+bitsandbytes
+accelerate
