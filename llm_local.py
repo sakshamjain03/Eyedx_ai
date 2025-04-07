@@ -2,7 +2,7 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 # Path to your fine-tuned model
-model_path = r"C:\My Data\New folder (2)\Eyedx_ai\LLM_model\Saksham-Med-Llama-8b"
+model_path = r"D:\Models\DeepSeek-R1-Distill-Qwen-1.5B"
 
 # Load tokenizer
 tokenizer = AutoTokenizer.from_pretrained(model_path)
@@ -14,13 +14,13 @@ model = AutoModelForCausalLM.from_pretrained(
     device_map="auto"  # Automatically assigns model to GPU if available
 )
 
-def generate_response(prompt, max_length=200):
+def generate_response(prompt, max_length=1000):
     inputs = tokenizer(prompt, return_tensors="pt").to("cuda")  # Move input to GPU
     with torch.no_grad():
         outputs = model.generate(**inputs, max_length=max_length)
     return tokenizer.decode(outputs[0], skip_special_tokens=True)
 
 # Example usage
-prompt = "What are the symptoms of diabetic retinopathy?"
+prompt = "what is glaucoma ? what are its sympotoms"
 response = generate_response(prompt)
 print(response)
